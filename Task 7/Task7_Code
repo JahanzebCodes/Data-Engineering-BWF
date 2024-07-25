@@ -1,0 +1,80 @@
+import pandas as pd
+import psycopg2
+from psycopg2 import sql
+
+# Define your PostgreSQL connection details
+connection_details = {
+    'dbname': 'customer_db',
+    'user': 'postgres',
+    'password': '@JsQp2851@!!',
+    'host': 'localhost',
+    'port': '5432'
+}
+
+schema_name = 'myPublic'
+
+# Step 1: Read the CSV file
+file_path = 'C:\\Users\\DELL\\OneDrive\\Desktop\\New Database\\dataset.csv'
+df = pd.read_csv(file_path)
+
+# Step 2: Clean and transform the data
+# Ensure 'order_id' is an integer
+df['order_id'] = df['order_id'].astype(int)
+
+# Filter out rows where 'product_id' is 0
+df = df[df['product_id'] != 0]
+
+# Cap 'amount' at 1500 Rs.
+df['amount'] = df['amount'].apply(lambda x: min(x, 1500))
+
+# Remove rows where 'status' is null or None
+df = df[df['status'].notnull()]
+
+# Remove duplicate rows
+df = df.drop_duplicates()
+
+
+# Step 3: Create a table in PostgreSQL
+# Connect to PostgreSQL database
+conn = psycopg2.connect(**connection_details)
+cursor = conn.cursor()
+
+cursor.execute(f"SET search_path TO {schema_name}")
+
+
+# Create a table with the predefined schema
+create_table_query = """
+CREATE TABLE IF NOT EXISTS SALES (
+    order_id INTEGER,
+    product_id INTEGER,
+    amount FLOAT,
+    status TEXT
+)
+"""
+cursor.execute(create_table_query)
+conn.commit()
+
+
+# Step 4: Insert the cleaned data into PostgreSQL
+for index, row in df.iterrows():
+        try:
+            insert_query = sql.SQL("""
+            INSERT INTO sales (order_id, product_id, amount, status)
+            VALUES (%s, %s, %s, %s)
+            """)
+            cursor.execute(insert_query, (row['order_id'], row['product_id'], row['amount'], row['status']))
+        except Exception as e:
+            print(f"Error inserting row {index}: {e}")
+            print(f"Row data: {row.to_dict()}")
+            conn.rollback()
+            continue
+
+    # Commit the transaction if all inserts were successful
+conn.commit()
+
+# Commit and close the connection
+conn.commit()
+cursor.close()
+conn.close()
+
+print("Data has been successfully inserted into the PostgreSQL database.")
